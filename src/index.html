@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LuxLite LogViewer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #111927;
+      --card-hover: #172237;
+      --inner-box: #1c2a42;
+      --border: #1f2d44;
+      --text: #f8fafc;
+      --text-dim: #64748b;
+      --accent-blue: #38bdf8;
+      --accent-green: #10b981;
+    }
+
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: 'Inter', sans-serif; display: flex; justify-content: center; padding: 40px 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app-container { width: 100%; max-width: 1200px; display: flex; flex-direction: column; gap: 24px; }
+
+    /* --- HEADER --- */
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-size: 1.4rem; font-weight: 800; letter-spacing: 0.5px; }
+    .lux { color: #3b82f6; margin-right: 6px; }
+    .lite { color: #475569; font-weight: 500; }
+
+    .header-actions { display: flex; align-items: center; gap: 20px; }
+    .live-status-wrapper { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px; }
+    .pulse-dot { width: 8px; height: 8px; background: var(--accent-green); border-radius: 50%; box-shadow: 0 0 10px var(--accent-green); }
+    .archive-dot { width: 8px; height: 8px; background: var(--text-dim); border-radius: 50%; }
+
+    .btn-action {
+      background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border); color: var(--text);
+      padding: 10px 20px; border-radius: 6px; font-size: 0.75rem; font-weight: 700;
+      cursor: pointer; transition: all 0.2s ease; text-transform: uppercase;
+    }
+    .btn-action:hover { background: var(--card-hover); border-color: #475569; }
+    #manual-refresh { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: #60a5fa; }
+    #manual-refresh:hover { background: #2563eb; color: white; border-color: #2563eb; box-shadow: 0 0 15px rgba(37, 99, 235, 0.4); }
+
+    /* --- CONTROL PANEL FILTERS --- */
+    .filter-panel {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 18px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+    }
+
+    /* --- CHART CONTAINER --- */
+    .chart-box { 
+      height: 160px; background: linear-gradient(180deg, rgba(17, 25, 39, 0.4) 0%, rgba(9, 13, 22, 0) 100%); 
+      border: 1px solid var(--border); border-radius: 12px; padding: 15px 20px; box-sizing: border-box;
+    }
+
+    /* --- SCRIPT DRAWER --- */
+    .cmd-toggle-line { display: flex; align-items: center; }
+    .cmd-link { font-size: 0.8rem; color: var(--text-dim); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; transition: color 0.2s; }
+    .cmd-link:hover { color: var(--accent-blue); }
+    
+    .advanced-wrapper { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: -8px; display: none; padding: 16px; box-sizing: border-box; }
+    #advanced-command { width: 100%; background: #070b12; border: 1px solid var(--border); border-radius: 6px; padding: 14px 18px; color: var(--accent-green); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; outline: none; box-sizing: border-box; }
+
+    /* --- REAL-TIME SEARCH BAR --- */
+    .search-wrapper { width: 100%; }
+    #log-search {
+      width: 100%; background: var(--card); border: 1px solid var(--border); 
+      border-radius: 8px; padding: 14px 18px; color: var(--text); 
+      font-size: 0.88rem; outline: none; box-sizing: border-box; transition: all 0.2s;
+    }
+    #log-search:focus { border-color: var(--accent-blue); box-shadow: 0 0 12px rgba(56, 189, 248, 0.15); }
+
+    /* --- 5-COLUMN TABLE SYSTEM MATRIX --- */
+    .table-header-grid, .summary-grid {
+      display: grid; 
+      grid-template-columns: 2.2fr 1.3fr 1fr 0.8fr 1.1fr;
+      align-items: center;
+    }
+
+    .table-header-grid {
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 24px;
+    }
+    
+    .btn-sort {
+      background: transparent; border: none; color: var(--text-dim); font-size: 0.75rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;
+      text-align: left; display: flex; align-items: center; gap: 6px; font-family: 'Inter', sans-serif; transition: color 0.2s;
+    }
+    .btn-sort:hover { color: var(--text); }
+    .btn-sort.active-filter { color: var(--accent-blue); }
+    .btn-sort:last-child { justify-self: end; }
+
+    /* --- LOG ROWS --- */
+    #log-container { display: flex; flex-direction: column; gap: 10px; }
+    .log-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: all 0.2s ease; }
+    .log-item:hover { border-color: #334155; background: var(--card-hover); }
+
+    .summary-grid { padding: 18px 24px; }
+    .col-sender { font-weight: 700; color: #93c5fd; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 20px; }
+    .col-timeframe { color: #94a3b8; font-size: 0.82rem; font-family: 'JetBrains Mono', monospace; }
+    .col-sysid { color: #e2e8f0; font-size: 0.82rem; font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+    .col-hits { color: #cbd5e1; font-size: 0.82rem; font-weight: 500; }
+    .col-severity { justify-self: end; }
+    .severity-pill { font-size: 0.65rem; font-weight: 800; padding: 4px 12px; border-radius: 4px; letter-spacing: 0.5px; }
+
+    /* --- DETAILS VIEW --- */
+    .details-pane { padding: 24px; background: rgba(10, 15, 26, 0.6); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
+    .msg-block { background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border); padding: 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; color: #e2e8f0; word-break: break-all; }
+    .instance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .instance-box { background: rgba(28, 42, 66, 0.3); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #cbd5e1; }
+    .instance-box strong { display: block; font-size: 0.65rem; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; font-family: 'Inter', sans-serif; letter-spacing: 0.5px; }
+    
+    .find-btn { width: 100%; padding: 14px; background: #059669; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: background 0.2s, transform 0.1s; }
+    .find-btn:hover { background: #10b981; }
+    .history-section { display: flex; flex-direction: column; gap: 8px; }
+    .history-title { font-size: 0.68rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+    .history-scroll { max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+    .history-scroll::-webkit-scrollbar { width: 6px; }
+    .history-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+    .history-row { background: rgba(28, 42, 66, 0.2); padding: 8px 16px; border-radius: 6px; font-size: 0.78rem; border: 1px solid rgba(255,255,255,0.01); font-family: 'JetBrains Mono', monospace; color: #94a3b8; }
+
+    .hidden-input { display: none; }
+    
+    /* Screen Reader Helper */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <div class="header">
+      <div class="logo"><span class="lux">LUXLITE</span><span class="lite">DIAGNOSTICS</span></div>
+      <div class="header-actions">
+        <div id="status-container" class="live-status-wrapper">
+          <div id="status-text">LIVE STREAM ACTIVE</div>
+          <div class="pulse-dot"></div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <label for="import-input" class="sr-only">Choose JSON file to import logs</label>
+          <input type="file" id="import-input" class="hidden-input" accept=".json">
+          <button id="import-logs" class="btn-action">IMPORT</button>
+          <button id="export-logs" class="btn-action">EXPORT</button>
+          <button id="manual-refresh" class="btn-action">REFRESH NOW</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-panel">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label for="config-logname" style="font-size: 0.7rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">Log Channel Source</label>
+        <select id="config-logname" style="background: var(--inner-box); border: 1px solid var(--border); color: white; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; outline: none; cursor: pointer; font-weight: 500;">
+          <option value="System">System Logs Channel</option>
+          <option value="Application">Application Logs Channel</option>
+          <option value="Security">Security Audit Channel</option>
+        </select>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1;">
+        <span id="severity-matrix-label" style="font-size: 0.7rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">Severity Target Matrix</span>
+        <div role="group" aria-labelledby="severity-matrix-label" style="display: flex; gap: 14px; background: var(--inner-box); padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border); align-items: center;">
+          <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #ef4444; font-weight: 600;">
+            <input type="checkbox" class="severity-check" value="1" checked style="accent-color: #ef4444;"> Critical
+          </label>
+          <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #f97316; font-weight: 600;">
+            <input type="checkbox" class="severity-check" value="2" checked style="accent-color: #f97316;"> Error
+          </label>
+          <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #38bdf8; font-weight: 600;">
+            <input type="checkbox" class="severity-check" value="3" checked style="accent-color: #38bdf8;"> Warning
+          </label>
+          <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #10b981; font-weight: 600;">
+            <input type="checkbox" class="severity-check" value="0,4" style="accent-color: #10b981;"> Informational / Audits
+          </label>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label for="config-limit" style="font-size: 0.7rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">Max Evaluation Limit</label>
+        <input type="number" id="config-limit" value="150" min="1" max="1000" style="background: var(--inner-box); border: 1px solid var(--border); color: white; padding: 7px 12px; border-radius: 6px; font-size: 0.85rem; width: 80px; outline: none; font-family: 'JetBrains Mono', monospace;">
+      </div>
+    </div>
+
+    <div class="chart-box">
+      <canvas id="pulseChart" aria-label="Log execution event pulse chart over timeline" role="img"></canvas>
+    </div>
+
+    <div class="cmd-toggle-line">
+      <div id="toggle-advanced" class="cmd-link">⚙️ Advanced Flags (Cross-Platform Execution)</div>
+    </div>
+
+    <div id="advanced-wrapper" class="advanced-wrapper">
+      <label for="advanced-command" style="font-size: 0.7rem; font-weight: 700; color: var(--accent-green); text-transform: uppercase; display: block; margin-bottom: 8px;">Active FilterHashtable Raw Evaluation Payload String</label>
+      <input type="text" id="advanced-command" placeholder="Enter custom flags... (Win example: LogName=Application Level=2 | Linux: -u nginx)">
+    </div>
+
+    <div class="search-wrapper">
+      <label for="log-search" class="sr-only">Search logs real-time content filter</label>
+      <input type="text" id="log-search" placeholder="🔍 Search logs by sender, message content, error codes, or PIDs...">
+    </div>
+
+    <div class="table-header-grid">
+      <button class="btn-sort" data-sort="sender">Sender ↑↓</button>
+      <button class="btn-sort" data-sort="last_seen">Timeframe ↑↓</button>
+      <button class="btn-sort" data-sort="sys_id">ID / PID ↑↓</button>
+      <button class="btn-sort" data-sort="count">Hits ↑↓</button>
+      <button class="btn-sort" data-sort="priority">Severity ↑↓</button>
+    </div>
+
+    <div id="log-container"></div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
